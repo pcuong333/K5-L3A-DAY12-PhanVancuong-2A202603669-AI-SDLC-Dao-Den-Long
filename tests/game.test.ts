@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultInput, createGame, getFloorHeight, stepGame } from "../src/sim/game";
 
-describe("Phase 2 simulation", () => {
+describe("Simulation regression", () => {
   it("collects motes only within the configured pickup radius", () => {
     const game = createGame(12, {
       random_motes: false,
@@ -16,10 +16,10 @@ describe("Phase 2 simulation", () => {
 
     expect(game.player.carried).toBe(1);
     expect(game.motes.map((mote) => mote.id)).toEqual(["M2"]);
-    expect(game.score).toBe(10);
+    expect(game.score).toBe(5);
   });
 
-  it("deposits carried motes and wins after the final lantern is lit", () => {
+  it("keeps playing after the final lantern is lit and checks the result at dawn", () => {
     const game = createGame(4, {
       random_motes: false,
       random_shades: false,
@@ -37,16 +37,28 @@ describe("Phase 2 simulation", () => {
         { id: "L4", lit: true },
         { id: "L5", lit: true },
       ],
+      time_left_s: 1,
     });
     const input = createDefaultInput();
     input.interact = true;
 
-    const events = stepGame(game, input);
+    const firstTickEvents = stepGame(game, input);
 
-    expect(game.status).toBe("won");
+    expect(game.status).toBe("playing");
     expect(game.lanterns[0].deposited).toBe(10);
     expect(game.player.carried).toBe(0);
-    expect(events.map((event) => event.name)).toEqual(["night_start", "deposit", "lantern_lit", "game_over"]);
+    expect(firstTickEvents.map((event) => event.name)).toEqual(["night_start", "deposit", "lantern_lit"]);
+
+    let dawnEvents: ReturnType<typeof stepGame> = [];
+    for (let tick = 0; tick < 59; tick += 1) dawnEvents = stepGame(game, input);
+
+    expect(game.status).toBe("won");
+    expect(game.reason).toBe("dawn_survived");
+    expect(game.score).toBe(1045);
+    expect(dawnEvents.at(-1)).toMatchObject({
+      name: "game_over",
+      data: { result: "won", reason: "dawn_survived" },
+    });
   });
 
   it("uses true 3D distance for lantern interaction", () => {

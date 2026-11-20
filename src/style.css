@@ -2,6 +2,7 @@
   font-family: "Segoe UI", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
   color: #f5f1e6;
   background: #0e1430;
+  --warning-color: #ff5a5f;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -116,8 +117,21 @@ input {
 }
 
 .timer.urgent {
-  color: #ff5a5f;
+  color: var(--warning-color);
   animation: timer-flash 0.8s steps(2, start) infinite;
+}
+
+.timer.urgent::before {
+  content: "⚠ ";
+  display: none;
+}
+
+.colorblind-mode .timer.urgent::before {
+  display: inline;
+}
+
+.colorblind-mode {
+  --warning-color: #ffffff;
 }
 
 .hud-bottom {
@@ -203,7 +217,7 @@ kbd {
   position: absolute;
   top: 96px;
   left: 50%;
-  color: #f2c14e;
+  color: var(--warning-color);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.15em;
@@ -346,6 +360,22 @@ kbd {
 .range-field input {
   width: 100%;
   accent-color: #f2c14e;
+}
+
+.check-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 22px 0;
+  color: #f5f1e6;
+  font-size: 13px;
+}
+
+.check-field input {
+  width: 20px;
+  height: 20px;
+  accent-color: #00b3ff;
 }
 
 #loading {

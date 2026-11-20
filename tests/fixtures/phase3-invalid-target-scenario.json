@@ -1,0 +1,12 @@
+{
+  "random_motes": false,
+  "random_shades": false,
+  "random_drifters": false,
+  "wind_enabled": false,
+  "shades": [{
+    "id": "S1",
+    "pos": [0, 1, 1],
+    "state": "drain",
+    "target_lantern_id": "L99"
+  }]
+}

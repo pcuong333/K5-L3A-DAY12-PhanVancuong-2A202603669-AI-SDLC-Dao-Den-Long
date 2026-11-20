@@ -1,14 +1,16 @@
 export type Vec3 = [number, number, number];
 export type Night = 1 | 2 | 3;
 export type GameStatus = "playing" | "paused" | "won" | "lost";
-export type ShadeStatus = "spawning" | "wander" | "chase" | "recoil" | "stunned";
+export type ShadeStatus = "spawning" | "wander" | "chase" | "recoil" | "stunned" | "drain";
 export type DrifterStatus = "idle" | "chase" | "flee" | "removed";
 
 export interface ScoreTuning {
   per_mote: number;
   per_lantern: number;
+  per_relight: number;
   per_stun: number;
-  per_second_left: number;
+  per_stun_draining: number;
+  per_dawn_lantern: number;
   per_flame_left: number;
 }
 
@@ -33,6 +35,14 @@ export interface Tuning {
   dash_cooldown_s: number;
   night2_duration_s: number;
   night3_duration_s: number;
+  fuel_max: number;
+  fuel_decay_per_s: number;
+  fuel_per_mote: number;
+  relight_cost: number;
+  win_ratio: number;
+  drain_per_s: number;
+  low_fuel_threshold: number;
+  capacity_max: number;
   safe_radius: number;
   shade_speed: number;
   shade_hit_radius: number;
@@ -45,6 +55,9 @@ export interface Lantern {
   pos: Vec3;
   lit: boolean;
   deposited: number;
+  fuelUnits: number;
+  everLit: boolean;
+  relitCount: number;
 }
 
 export interface Mote {
@@ -66,6 +79,8 @@ export interface Shade {
   pulsePushRemaining: number;
   safePushTarget?: Vec3;
   safePushTicksLeft: number;
+  targetLanternId?: string;
+  drainTicks: number;
 }
 
 export interface Drifter {
@@ -104,6 +119,7 @@ export interface Player {
   facingYaw: number;
   flames: number;
   carried: number;
+  successfulLights: number;
   invulnTicks: number;
   dashCooldownTicks: number;
   dashTicksLeft: number;
@@ -140,6 +156,7 @@ export interface Scenario {
     dash_cd_ticks?: number;
     pulse_cd_ticks?: number;
     charm_ticks?: number;
+    successful_lights?: number;
   };
   random_motes?: boolean;
   random_shades?: boolean;
@@ -156,6 +173,7 @@ export interface Scenario {
     pos: Vec3;
     state?: ShadeStatus;
     state_ticks_left?: number;
+    target_lantern_id?: string;
   }>;
   drifters?: Array<{
     id?: string;
@@ -175,6 +193,9 @@ export interface Scenario {
     pos?: Vec3;
     deposited?: number;
     lit?: boolean;
+    fuel?: number;
+    ever_lit?: boolean;
+    relit_count?: number;
   }>;
   time_left_s?: number;
 }
@@ -191,7 +212,7 @@ export interface GameState {
   simTick: number;
   night: Night;
   status: GameStatus;
-  reason?: "all_lit" | "dawn" | "no_flames";
+  reason?: "dawn_survived" | "dawn" | "no_flames";
   timeLeftTicks: number;
   score: number;
   player: Player;

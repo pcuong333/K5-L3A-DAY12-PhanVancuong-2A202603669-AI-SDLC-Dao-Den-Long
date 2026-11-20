@@ -4,7 +4,9 @@ import {
   countLitLanterns,
   createDefaultInput,
   createGame,
-  getNearestUnlitLantern,
+  getLanternLightRatio,
+  getNearestReceivableLantern,
+  getPlayerCapacity,
   getTimeLeftSeconds,
   isWithinLanternRange,
   isWindWarning,
@@ -27,6 +29,7 @@ const nightLabel = requiredElement<HTMLElement>("night-title");
 const timeLabel = requiredElement<HTMLTimeElement>("time");
 const lanternsLabel = requiredElement<HTMLElement>("lanterns");
 const scoreLabel = requiredElement<HTMLElement>("score");
+const carryCount = requiredElement<HTMLElement>("carry-count");
 const carrySlots = requiredElement<HTMLDivElement>("carry-slots");
 const dashLabel = requiredElement<HTMLElement>("dash-cooldown");
 const pulseLabel = requiredElement<HTMLElement>("pulse-cooldown");
@@ -113,9 +116,21 @@ playerGroup.add(new THREE.PointLight("#FFB347", 0.8, 7));
 scene.add(playerGroup);
 
 const keys = new Set<string>();
-const lanternMeshes = new Map<string, { group: THREE.Group; glow: THREE.PointLight; flame: THREE.Mesh }>();
+const lanternMeshes = new Map<string, {
+  group: THREE.Group;
+  glow: THREE.PointLight;
+  flame: THREE.Mesh;
+  fuelBackground: THREE.Mesh;
+  fuelFill: THREE.Mesh;
+  paperTear: THREE.Mesh;
+}>();
 const moteMeshes = new Map<string, THREE.Group>();
-const shadeMeshes = new Map<string, { group: THREE.Group; orb: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial> }>();
+const shadeMeshes = new Map<string, {
+  group: THREE.Group;
+  orb: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
+  outline: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  eyes: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>[];
+}>();
 const drifterMeshes = new Map<string, THREE.Group>();
 const charmMeshes = new Map<string, THREE.Group>();
 
@@ -158,6 +173,20 @@ let audio: AudioState | undefined;
 let warnedMissingAudio = false;
 let volume = readSetting("dao-den-long.volume", 0.35, 0, 1);
 let sensitivity = readSetting("dao-den-long.sensitivity", 0.35, 0.1, 1);
+let colorblindMode = readBooleanSetting("dao-den-long.colorblind", false);
+
+root.classList.toggle("colorblind-mode", colorblindMode);
+
+function readBooleanSetting(key: string, fallback: boolean): boolean {
+  const raw = localStorage.getItem(key);
+  return raw === "true" ? true : raw === "false" ? false : fallback;
+}
+
+function setColorblindMode(value: boolean): void {
+  colorblindMode = value;
+  root.classList.toggle("colorblind-mode", value);
+  localStorage.setItem("dao-den-long.colorblind", String(value));
+}
 
 function readSetting(key: string, fallback: number, minimum: number, maximum: number): number {
   const raw = localStorage.getItem(key);
@@ -231,10 +260,12 @@ function startMusic(): void {
 function handleAudioEvents(events: GameEvent[]): void {
   for (const event of events) {
     if (event.name === "mote_picked" || event.name === "charm_picked") playTone(880, 0.12);
+    else if (event.name === "refuel") playTone(740, 0.16);
     else if (event.name === "lantern_lit") {
       playTone(660, 0.18);
       playTone(990, 0.3);
-    } else if (event.name === "pulse") playTone(220, 0.24, "triangle");
+    } else if (event.name === "lantern_out") playTone(150, 0.35, "triangle");
+    else if (event.name === "pulse") playTone(220, 0.24, "triangle");
     else if (event.name === "player_hit") playTone(130, 0.32, "sawtooth");
     else if (event.name === "jump") playTone(520, 0.1);
     else if (event.name === "dash") playTone(330, 0.15, "triangle");
@@ -415,9 +446,25 @@ function makeLantern(id: string, x: number, y: number, z: number): void {
   const glow = new THREE.PointLight("#FFB347", 0, 15, 2);
   glow.position.y = 1.85;
   group.add(glow);
+  const fuelBackground = new THREE.Mesh(
+    new THREE.BoxGeometry(1.34, 0.15, 0.06),
+    new THREE.MeshBasicMaterial({ color: "#0E1430" }),
+  );
+  fuelBackground.position.set(0, 2.92, 0);
+  const fuelFill = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 0.08, 0.08),
+    new THREE.MeshBasicMaterial({ color: "#F2C14E" }),
+  );
+  fuelFill.position.set(0, 2.92, 0.04);
+  const paperTear = new THREE.Mesh(
+    new THREE.ConeGeometry(0.16, 0.26, 3),
+    new THREE.MeshBasicMaterial({ color: "#0E1430" }),
+  );
+  paperTear.position.set(0.36, 1.78, 0.5);
+  group.add(fuelBackground, fuelFill, paperTear);
   group.position.set(x, y, z);
   lanternGroup.add(group);
-  lanternMeshes.set(id, { group, glow, flame });
+  lanternMeshes.set(id, { group, glow, flame, fuelBackground, fuelFill, paperTear });
 }
 
 function rebuildLanterns(): void {
@@ -428,7 +475,12 @@ function rebuildLanterns(): void {
   }
 }
 
-function makeShade(): { group: THREE.Group; orb: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial> } {
+function makeShade(): {
+  group: THREE.Group;
+  orb: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
+  outline: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  eyes: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>[];
+} {
   const group = new THREE.Group();
   const orb = new THREE.Mesh(
     new THREE.SphereGeometry(0.68, 16, 12),
@@ -439,17 +491,28 @@ function makeShade(): { group: THREE.Group; orb: THREE.Mesh<THREE.SphereGeometry
   group.add(orb);
   const outline = new THREE.Mesh(
     new THREE.SphereGeometry(0.72, 12, 10),
-    new THREE.MeshBasicMaterial({ color: "#7A3CFF", wireframe: true, transparent: true, opacity: 0.55 }),
+    new THREE.MeshBasicMaterial({
+      color: colorblindMode ? "#00B3FF" : "#7A3CFF",
+      wireframe: true,
+      transparent: true,
+      opacity: 0.55,
+    }),
   );
   outline.scale.set(1, 1.35, 0.85);
   group.add(outline);
-  const eyeMaterial = new THREE.MeshStandardMaterial({ color: "#F5F1E6", emissive: "#7A3CFF", emissiveIntensity: 1.8 });
+  const eyeMaterial = new THREE.MeshStandardMaterial({
+    color: "#F5F1E6",
+    emissive: colorblindMode ? "#00B3FF" : "#7A3CFF",
+    emissiveIntensity: 1.8,
+  });
+  const eyes: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>[] = [];
   for (const x of [-0.2, 0.2]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), eyeMaterial);
     eye.position.set(x, 0.12, 0.54);
     group.add(eye);
+    eyes.push(eye);
   }
-  return { group, orb };
+  return { group, orb, outline, eyes };
 }
 
 function addMote(id: string): void {
@@ -533,6 +596,9 @@ function syncEntities(now: number): void {
     mesh.group.lookAt(game.player.pos[0], game.player.pos[1], game.player.pos[2]);
     mesh.orb.material.color.set(shade.state === "stunned" ? "#3A3450" : "#120A1A");
     mesh.orb.material.emissive.set(shade.state === "stunned" ? "#3A3450" : "#120A1A");
+    const accent = colorblindMode ? "#00B3FF" : "#7A3CFF";
+    mesh.outline.material.color.set(accent);
+    for (const eye of mesh.eyes) eye.material.emissive.set(accent);
   }
 
   for (const drifter of game.drifters) {
@@ -587,7 +653,7 @@ function formatSeconds(value: number): string {
 }
 
 function updateLanternArrow(): void {
-  const lantern = getNearestUnlitLantern(game);
+  const lantern = getNearestReceivableLantern(game);
   if (!lantern) {
     arrow.hidden = true;
     return;
@@ -626,7 +692,10 @@ function updateHud(): void {
   flamesLabel.textContent = "✦ ".repeat(Math.max(0, game.player.flames)).trim() || "0";
   lanternsLabel.textContent = `${countLitLanterns(game)} / ${game.lanterns.length}`;
   scoreLabel.textContent = String(game.score);
-  carrySlots.innerHTML = Array.from({ length: TUNING.carry_capacity }, (_, index) =>
+  const capacity = getPlayerCapacity(game);
+  carryCount.textContent = `ĐOM ĐÓM ${game.player.carried}/${capacity}`;
+  carrySlots.setAttribute("aria-label", `Đom đóm đang mang ${game.player.carried} trên ${capacity}`);
+  carrySlots.innerHTML = Array.from({ length: capacity }, (_, index) =>
     `<span class="mote-slot${index < game.player.carried ? " filled" : ""}"></span>`,
   ).join("");
   dashLabel.textContent = game.player.dashCooldownTicks > 0
@@ -636,21 +705,23 @@ function updateHud(): void {
     ? `TỎA SÁNG ${formatSeconds(game.player.pulseCooldownTicks)}s`
     : `TỎA SÁNG ${game.player.carried >= TUNING.pulse_cost ? "SẴN SÀNG" : "3 ĐOM ĐÓM"}`;
 
-  const nearbyLantern = getNearestUnlitLantern(game);
+  const nearbyLantern = getNearestReceivableLantern(game);
+  const action = nearbyLantern?.lit ? "Châm dầu" : "Nạp ánh sáng";
   hint.textContent = nearbyLantern && isWithinLanternRange(game.player.pos, nearbyLantern)
-    ? `E — Nạp ánh sáng (${game.player.carried}/${TUNING.carry_capacity})`
+    ? `E — ${action} (${game.player.carried}/${capacity})`
     : "";
   windWarning.hidden = !isWindWarning(game);
+  windWarning.textContent = `${colorblindMode ? "⚠ " : ""}GIÓ MẠNH SẮP ĐẾN`;
   updateLanternArrow();
 }
 
 function screenMarkup(mode: Screen | "pause"): string {
   if (mode === "menu") {
     return `<article class="panel">
-      <p class="eyebrow">Day 12 · AI SDLC · Phase 2</p>
+      <p class="eyebrow">Day 12 · AI SDLC · Phase 3</p>
       <h1>ĐẢO ĐÈN LỒNG</h1>
       <h2>Ba hòn đảo · Ba đêm</h2>
-      <p class="story">Mây mang ánh sáng trở lại giữa biển mây. Thu gom đom đóm, thắp đèn, vượt cầu tre và tìm đường lên tháp chuông.</p>
+      <p class="story">Mây phải giữ đảo sáng tới bình minh: thu gom đom đóm, thắp và châm dầu cho đèn, rồi ngăn Bóng Mực hút cạn ánh sáng.</p>
       <div class="menu-actions">
         <button class="game-button" data-action="start">Bắt đầu hành trình</button>
         <button class="game-button secondary" data-action="settings">Cài đặt</button>
@@ -685,11 +756,13 @@ function screenMarkup(mode: Screen | "pause"): string {
   if (mode === "settings") {
     return `<article class="panel">
       <p class="eyebrow">Cài đặt · được lưu trên thiết bị</p>
-      <h1>ÂM THANH & ĐIỀU KHIỂN</h1>
+      <h1>ÂM THANH & HIỂN THỊ</h1>
       <label class="range-field"><span>Âm lượng <output id="volume-value">${Math.round(volume * 100)}%</output></span>
         <input id="volume-setting" type="range" min="0" max="1" step="0.01" value="${volume}"></label>
       <label class="range-field"><span>Độ nhạy chuột <output id="sensitivity-value">${Math.round(sensitivity * 100)}%</output></span>
         <input id="sensitivity-setting" type="range" min="0.1" max="1" step="0.01" value="${sensitivity}"></label>
+      <label class="check-field"><span>Bảng màu dễ phân biệt</span>
+        <input id="colorblind-setting" type="checkbox"${colorblindMode ? " checked" : ""}></label>
       <div class="menu-actions">
         <button class="game-button" data-action="settings-back">Quay lại</button>
       </div>
@@ -697,7 +770,7 @@ function screenMarkup(mode: Screen | "pause"): string {
   }
   if (game.status === "won" && game.night === 3) {
     return `<article class="panel">
-      <p class="eyebrow">Ba ngọn đèn đã gọi bình minh</p>
+      <p class="eyebrow">Mây đã giữ đủ ánh sáng tới bình minh</p>
       <h1>BÌNH MINH</h1>
       <p class="story">Tổng điểm ba Đêm: <strong>${totalScore}</strong></p>
       <div class="menu-actions"><button class="game-button" data-action="menu">Về menu</button></div>
@@ -706,8 +779,8 @@ function screenMarkup(mode: Screen | "pause"): string {
   if (game.status === "won") {
     return `<article class="panel">
       <p class="eyebrow">Đêm ${game.night} hoàn thành</p>
-      <h1>ĐẢO ĐÃ SÁNG</h1>
-      <p class="story">Điểm Đêm này: ${game.score} · Tổng điểm: ${totalScore}</p>
+      <h1>GIỮ SÁNG TỚI BÌNH MINH</h1>
+      <p class="story">Đèn còn sáng: ${countLitLanterns(game)} / ${game.lanterns.length} · Điểm Đêm này: ${game.score} · Tổng điểm: ${totalScore}</p>
       <div class="menu-actions">
         <button class="game-button" data-action="next">Đi tiếp Đêm ${game.night + 1}</button>
         <button class="game-button secondary" data-action="menu">Về menu</button>
@@ -716,8 +789,8 @@ function screenMarkup(mode: Screen | "pause"): string {
   }
   return `<article class="panel">
     <p class="eyebrow">Đêm ${game.night} · ${nightNames[game.night]}</p>
-    <h1>ĐÊM TỐI THẮNG</h1>
-    <p class="story">Mây còn ${game.player.flames} Ngọn Lửa. Điểm đang có: ${game.score}. Hãy thử lại Đêm này.</p>
+    <h1>${game.reason === "dawn" ? "BÌNH MINH ĐÃ ĐẾN" : "ĐÊM TỐI THẮNG"}</h1>
+    <p class="story">${game.reason === "dawn" ? `Chỉ còn ${countLitLanterns(game)} / ${game.lanterns.length} đèn sáng; cần ${Math.ceil(TUNING.win_ratio * game.lanterns.length)} để giữ đảo đến bình minh.` : `Mây còn ${game.player.flames} Ngọn Lửa.`} Điểm đang có: ${game.score}. Hãy thử lại Đêm này.</p>
     <div class="menu-actions">
       <button class="game-button" data-action="retry">Chơi lại Đêm ${game.night}</button>
       <button class="game-button secondary" data-action="menu">Về menu</button>
@@ -831,6 +904,8 @@ function updateSettingsInput(target: EventTarget | null): void {
     localStorage.setItem("dao-den-long.sensitivity", String(sensitivity));
     const output = document.getElementById("sensitivity-value");
     if (output) output.textContent = `${Math.round(sensitivity * 100)}%`;
+  } else if (target.id === "colorblind-setting") {
+    setColorblindMode(target.checked);
   }
 }
 
@@ -870,12 +945,24 @@ function updateWorldAndCamera(now: number): void {
     const meshes = lanternMeshes.get(lantern.id);
     if (!meshes) continue;
     const flameMaterial = meshes.flame.material as THREE.MeshStandardMaterial;
+    const fuelRatio = lantern.fuelUnits / (TUNING.fuel_max * TICK_RATE);
+    const lowFuel = lantern.lit && lantern.fuelUnits < TUNING.low_fuel_threshold * TICK_RATE;
+    const blinkOn = !lowFuel || Math.floor(now / 500) % 2 === 0;
+    const fuelBarColor = colorblindMode && lowFuel ? "#FFFFFF" : lowFuel ? "#FF5A5F" : "#F2C14E";
+    meshes.group.scale.y = lantern.lit ? 1 : 0.8;
+    meshes.paperTear.visible = !lantern.lit;
+    meshes.fuelBackground.visible = lantern.lit && blinkOn;
+    meshes.fuelFill.visible = lantern.lit && blinkOn;
+    meshes.fuelFill.scale.x = Math.max(0.001, fuelRatio);
+    meshes.fuelFill.position.x = -0.6 + 0.6 * fuelRatio;
+    (meshes.fuelFill.material as THREE.MeshBasicMaterial).color.set(fuelBarColor);
     flameMaterial.color.set(lantern.lit ? "#FFE9B0" : "#5B5F6E");
     flameMaterial.emissive.set(lantern.lit ? "#FFB347" : "#5B5F6E");
-    flameMaterial.emissiveIntensity = lantern.lit ? 2.8 : 0.3;
-    meshes.glow.intensity = lantern.lit ? 3.8 : 0;
+    flameMaterial.emissiveIntensity = lantern.lit ? 2.8 * fuelRatio : 0.3;
+    meshes.flame.visible = lantern.lit && blinkOn;
+    meshes.glow.intensity = lantern.lit && blinkOn ? 3.8 * fuelRatio : 0;
   }
-  const lightLevel = 0.15 + 0.55 * (countLitLanterns(game) / game.lanterns.length);
+  const lightLevel = 0.15 + 0.55 * getLanternLightRatio(game);
   hemisphere.intensity = lightLevel;
   const distance = 12;
   const height = 5.2;

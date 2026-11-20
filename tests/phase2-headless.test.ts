@@ -40,7 +40,7 @@ function runHeadless(
   return result.stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line) as JsonLine);
 }
 
-describe("Test Contract v1.1 headless scenarios", () => {
+describe("Headless contract regression scenarios", () => {
   it("emits dash and pause/resume events while simulation time freezes", () => {
     const lines = runHeadless(
       1,
@@ -127,8 +127,8 @@ describe("Test Contract v1.1 headless scenarios", () => {
     expect(lines.filter((line) => line.type === "event" && line.name === "shade_spawned")).toHaveLength(2);
   });
 
-  it("simulates the full six-minute Night 3 contract", () => {
-    const lines = runHeadless(3, 21_600, "phase2-full-night-scenario.json", "phase2-empty-inputs.json", 21_600);
-    expect(lines.at(-1)).toMatchObject({ type: "end", ticks: 21_600, state: "lost" });
+  it("simulates the full five-minute Night 3 contract", () => {
+    const lines = runHeadless(3, 18_000, "phase2-full-night-scenario.json", "phase2-empty-inputs.json", 18_000);
+    expect(lines.at(-1)).toMatchObject({ type: "end", ticks: 18_000, state: "lost" });
   });
 });

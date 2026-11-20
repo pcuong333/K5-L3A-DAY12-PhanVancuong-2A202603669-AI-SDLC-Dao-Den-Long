@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { TICK_RATE } from "./sim/config";
+import { TICK_RATE, TUNING } from "./sim/config";
 import { createGame, getTimeLeftSeconds, stepGame } from "./sim/game";
 import type {
   DrifterStatus,
@@ -37,7 +37,14 @@ function nonNegativeInteger(value: unknown, label: string): number {
 }
 
 function parseShadeStatus(value: unknown, label: string): ShadeStatus {
-  if (value !== "spawning" && value !== "wander" && value !== "chase" && value !== "recoil" && value !== "stunned") {
+  if (
+    value !== "spawning" &&
+    value !== "wander" &&
+    value !== "chase" &&
+    value !== "recoil" &&
+    value !== "stunned" &&
+    value !== "drain"
+  ) {
     throw new ContractInputError(`${label} is not a valid shade state`);
   }
   return value;
@@ -72,6 +79,9 @@ function parseScenario(value: unknown): Scenario {
     }
     if (value.player.charm_ticks !== undefined) {
       player.charm_ticks = nonNegativeInteger(value.player.charm_ticks, "scenario.player.charm_ticks");
+    }
+    if (value.player.successful_lights !== undefined) {
+      player.successful_lights = nonNegativeInteger(value.player.successful_lights, "scenario.player.successful_lights");
     }
     scenario.player = player;
   }
@@ -127,6 +137,12 @@ function parseScenario(value: unknown): Scenario {
       if (entry.state !== undefined) shade.state = parseShadeStatus(entry.state, `scenario.shades[${index}].state`);
       if (entry.state_ticks_left !== undefined) {
         shade.state_ticks_left = nonNegativeInteger(entry.state_ticks_left, `scenario.shades[${index}].state_ticks_left`);
+      }
+      if (entry.target_lantern_id !== undefined) {
+        if (typeof entry.target_lantern_id !== "string" || entry.target_lantern_id.length === 0) {
+          throw new ContractInputError(`scenario.shades[${index}].target_lantern_id must be a non-empty string`);
+        }
+        shade.target_lantern_id = entry.target_lantern_id;
       }
       return shade;
     });
@@ -206,6 +222,21 @@ function parseScenario(value: unknown): Scenario {
           throw new ContractInputError(`scenario.lanterns[${index}].lit must be a boolean`);
         }
         lantern.lit = entry.lit;
+      }
+      if (entry.fuel !== undefined) {
+        if (!finiteNumber(entry.fuel) || entry.fuel < 0 || entry.fuel > TUNING.fuel_max) {
+          throw new ContractInputError(`scenario.lanterns[${index}].fuel must be in [0, ${TUNING.fuel_max}]`);
+        }
+        lantern.fuel = entry.fuel;
+      }
+      if (entry.ever_lit !== undefined) {
+        if (typeof entry.ever_lit !== "boolean") {
+          throw new ContractInputError(`scenario.lanterns[${index}].ever_lit must be a boolean`);
+        }
+        lantern.ever_lit = entry.ever_lit;
+      }
+      if (entry.relit_count !== undefined) {
+        lantern.relit_count = nonNegativeInteger(entry.relit_count, `scenario.lanterns[${index}].relit_count`);
       }
       return lantern;
     });
@@ -294,17 +325,22 @@ function snapshot(game: GameState): Record<string, unknown> {
       charm_s: round(game.player.charmTicksLeft / TICK_RATE),
       flames: game.player.flames,
       carried: game.player.carried,
+      capacity: Math.min(TUNING.capacity_max, TUNING.carry_capacity + 2 * game.player.successfulLights),
     },
     lanterns: game.lanterns.map((lantern) => ({
       id: lantern.id,
       pos: lantern.pos.map(round),
       lit: lantern.lit,
       deposited: lantern.deposited,
+      fuel: Math.round((lantern.fuelUnits / TICK_RATE) * 10) / 10,
+      ever_lit: lantern.everLit,
+      relit_count: lantern.relitCount,
     })),
     shades: game.shades.map((shade) => ({
       id: shade.id,
       pos: shade.pos.map(round),
       state: shade.state,
+      target_lantern_id: shade.targetLanternId ?? null,
     })),
     motes_active: game.motes.length,
     motes: game.motes.map((mote) => ({

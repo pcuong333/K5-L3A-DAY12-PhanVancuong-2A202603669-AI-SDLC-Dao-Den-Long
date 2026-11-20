@@ -1,8 +1,8 @@
-# Đảo Đèn Lồng — Phase 2
+# Đảo Đèn Lồng — Phase 3
 
 > **Video Phase 1 (0:47):** [Xem gameplay](docs/demo/demo.mp4)
 
-Game 3D góc nhìn thứ ba qua ba đêm: điều khiển Mây thu thập đom đóm, thắp sáng các Đèn Lồng Lớn, lướt qua biển mây và tránh Bóng Mực cùng Gió Lạc.
+Game 3D góc nhìn thứ ba qua ba đêm: điều khiển Mây thu thập đom đóm, thắp và châm dầu cho các Đèn Lồng Lớn, rồi giữ đủ đèn sáng tới bình minh trong khi tránh Bóng Mực và Gió Lạc.
 
 ## Chạy game
 
@@ -18,9 +18,11 @@ Mở URL Vite hiển thị trong terminal. Build production bằng `npm.cmd run 
 ### Điều khiển
 
 - `WASD` / phím mũi tên: di chuyển; `Space`: nhảy; `Shift`: lướt.
-- `E`: nạp tối đa 10 đom đóm vào Đèn Lồng Lớn gần nhất.
+- `E`: thắp đèn mới (10 đom đóm), thắp lại (5), hoặc châm dầu (mỗi đom đóm thêm tối đa 10 fuel).
 - `Q`: tỏa sáng, tiêu hao 3 đom đóm để đẩy và làm choáng mục tiêu gần.
 - `Esc` / `P`: tạm dừng; kéo chuột: xoay camera.
+
+Trong **Cài đặt**, bật “Bảng màu dễ phân biệt” để đổi màu viền Bóng Mực và cảnh báo; lựa chọn được lưu trên thiết bị.
 
 ### Headless
 
@@ -28,7 +30,7 @@ Mở URL Vite hiển thị trong terminal. Build production bằng `npm.cmd run 
 npm.cmd run headless -- --seed 42 --night 2 --ticks 600 --out result.jsonl
 ```
 
-Hỗ trợ `--night 1|2|3`, `--scenario`, `--inputs` và `--snapshot-every`. Cấu hình mô phỏng nằm trong [game.contract.json](game.contract.json); tiêu chí Phase 2 và kết quả kiểm chứng ở [docs/phase-2.md](docs/phase-2.md). Phase 1 được giữ làm lịch sử tại [docs/phase-1.md](docs/phase-1.md).
+Hỗ trợ `--night 1|2|3`, `--scenario`, `--inputs` và `--snapshot-every`. Cấu hình Test Contract v1.2 nằm trong [game.contract.json](game.contract.json); luật mới và kết quả kiểm chứng ở [docs/phase-3.md](docs/phase-3.md). Phase 1 và 2 được lưu làm lịch sử tại [docs/phase-1.md](docs/phase-1.md) và [docs/phase-2.md](docs/phase-2.md).
 
 ---
 

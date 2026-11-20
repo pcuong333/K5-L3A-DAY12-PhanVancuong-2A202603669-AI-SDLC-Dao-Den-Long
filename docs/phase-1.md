@@ -28,5 +28,6 @@ Chỉ ghi kết quả sau khi lệnh kiểm chứng thật sự chạy. Không d
 - `npm run build`: TypeScript và Vite build production đạt.
 - Headless thắng: `tests/fixtures/win-scenario.json` + `tests/fixtures/win-inputs.json`; output thực tế ở `docs/proof/phase-1-win.jsonl` (thắng tại tick 1).
 - Headless đứng yên đúng 60 bước: `docs/proof/phase-1-fixed-tick.jsonl` cho thấy tick 60, còn 299 giây.
+- Ảnh [phase-1-gameplay.png](proof/phase-1-gameplay.png) ghi lại cảnh game 3D đang chạy với HUD, Mây, Bóng Mực và 1 đom đóm đã nhặt (10 điểm). Ảnh là bằng chứng trạng thái chơi, không tự nó chứng minh toàn bộ điều khiển hay luồng thắng.
 - Chạy scenario headless hai lần với seed `42`: SHA-256 giống nhau (`E8290098D9160FC6840FBCB68DFFE9B92E0DC910352AA1A1532C0CF446AAEC34`).
 - Inputs có tick lặp trả exit code `2`, như Test Contract yêu cầu.

@@ -29,6 +29,26 @@ body {
   background: #0e1430;
 }
 
+#game.large-text #hud {
+  width: 80%;
+  height: 80%;
+  transform: scale(1.25);
+  transform-origin: top left;
+}
+
+#game.large-text .panel {
+  transform: scale(1.25);
+}
+
+#game.reduced-motion *,
+#game.reduced-motion *::before,
+#game.reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
 button,
 input {
   font: inherit;
@@ -71,14 +91,14 @@ input {
 .stat span,
 .mote-panel > span {
   color: #bdc5d5;
-  font-size: 9px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.13em;
 }
 
 .stat strong {
   color: #f5f1e6;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -96,13 +116,13 @@ input {
 }
 
 .night-label strong {
-  font-size: 13px;
+  font-size: 18px;
   letter-spacing: 0.12em;
 }
 
 .night-label span {
   color: #f5f1e6;
-  font-size: 10px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -187,13 +207,14 @@ input {
   align-items: center;
   gap: 8px;
   color: #f5f1e6;
-  font-size: 10px;
+  font-size: 18px;
   font-weight: 800;
 }
 
 kbd {
   min-width: 34px;
   padding: 3px 6px;
+  font-size: 18px;
   border: 1px solid rgb(242 193 78 / 55%);
   border-radius: 5px;
   color: #f2c14e;
@@ -208,7 +229,7 @@ kbd {
   border-radius: 8px;
   background: rgb(14 20 48 / 84%);
   color: #fff6c2;
-  font-size: 12px;
+  font-size: 18px;
   font-weight: 800;
   transform: translateX(-50%);
 }
@@ -218,12 +239,47 @@ kbd {
   top: 96px;
   left: 50%;
   color: var(--warning-color);
-  font-size: 12px;
+  font-size: 18px;
   font-weight: 900;
   letter-spacing: 0.15em;
   text-shadow: 0 2px 8px #0e1430;
   transform: translateX(-50%);
   animation: timer-flash 0.8s steps(2, start) infinite;
+}
+
+.status-warning {
+  position: absolute;
+  top: 132px;
+  left: 50%;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgb(14 20 48 / 88%);
+  color: #ff5a5f;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 8px #0e1430;
+  transform: translateX(-50%);
+}
+
+.low-fuel-warning {
+  top: 170px;
+  color: #ffd879;
+}
+
+.event-caption {
+  position: absolute;
+  top: 208px;
+  left: 50%;
+  color: #fff6c2;
+  font-size: 18px;
+  font-weight: 900;
+  text-shadow: 0 2px 8px #0e1430;
+  transform: translateX(-50%);
+}
+
+.event-caption:empty {
+  display: none;
 }
 
 .lantern-arrow {
@@ -246,8 +302,12 @@ kbd {
   border-radius: 5px;
   background: rgb(14 20 48 / 85%);
   color: #f5f1e6;
-  font-size: 9px;
+  font-size: 18px;
   font-weight: 900;
+}
+
+.shade-arrow {
+  color: #ff5a5f;
 }
 
 .screen {
@@ -257,6 +317,7 @@ kbd {
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow: auto;
   background: radial-gradient(ellipse at center, rgb(14 20 48 / 40%), rgb(14 20 48 / 78%));
 }
 
@@ -267,6 +328,8 @@ kbd {
 .panel {
   width: min(520px, 100%);
   padding: clamp(24px, 4vw, 42px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
   border: 1px solid rgb(242 193 78 / 48%);
   border-radius: 24px;
   background: linear-gradient(150deg, rgb(14 20 48 / 96%), rgb(27 35 80 / 94%));
@@ -274,10 +337,14 @@ kbd {
   text-align: center;
 }
 
+.settings-panel {
+  width: min(760px, 100%);
+}
+
 .eyebrow {
   margin: 0 0 10px;
   color: #f2c14e;
-  font-size: 10px;
+  font-size: 18px;
   font-weight: 900;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -293,13 +360,13 @@ kbd {
 .panel h2 {
   margin: 8px 0 0;
   color: #f2c14e;
-  font-size: 15px;
+  font-size: 18px;
 }
 
 .story {
   margin: 18px 0;
   color: #d3dae7;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.65;
 }
 
@@ -316,7 +383,7 @@ kbd {
   border-radius: 999px;
   background: #f2c14e;
   color: #211a12;
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 900;
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease, border-color 120ms ease;
@@ -348,7 +415,7 @@ kbd {
   gap: 10px;
   margin: 22px 0;
   color: #f5f1e6;
-  font-size: 12px;
+  font-size: 18px;
   text-align: left;
 }
 
@@ -369,7 +436,7 @@ kbd {
   gap: 16px;
   margin: 22px 0;
   color: #f5f1e6;
-  font-size: 13px;
+  font-size: 18px;
 }
 
 .check-field input {
@@ -378,13 +445,88 @@ kbd {
   accent-color: #00b3ff;
 }
 
+.key-bindings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.binding-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  border-radius: 12px !important;
+  text-align: left;
+}
+
+.binding-button kbd {
+  flex: 0 0 auto;
+}
+
+.binding-status,
+#leaderboard-status {
+  min-height: 1.5em;
+  color: #ffd879;
+  font-size: 18px;
+}
+
+.leaderboard-panel {
+  width: min(900px, 100%);
+}
+
+.leaderboard-form {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0;
+  text-align: left;
+}
+
+.leaderboard-form label {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.leaderboard-form input {
+  min-height: 46px;
+  padding: 8px 12px;
+  border: 1px solid rgb(242 193 78 / 55%);
+  border-radius: 9px;
+  background: #0e1430;
+  color: #f5f1e6;
+  font-size: 18px;
+}
+
+#leaderboard-content {
+  font-size: 18px;
+}
+
+.leaderboard-table {
+  width: 100%;
+  margin-top: 20px;
+  border-collapse: collapse;
+  font-size: 18px;
+  text-align: left;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgb(242 193 78 / 28%);
+}
+
+.leaderboard-table th {
+  color: #f2c14e;
+}
+
 #loading {
   position: absolute;
   z-index: 5;
   top: 50%;
   left: 50%;
   color: #f2c14e;
-  font-size: 14px;
+  font-size: 18px;
   transform: translate(-50%, -50%);
 }
 
@@ -414,15 +556,15 @@ kbd {
   }
 
   .night-label strong {
-    font-size: 11px;
+    font-size: 18px;
   }
 
   .night-label span {
-    font-size: 8px;
+    font-size: 18px;
   }
 
   .stat strong {
-    font-size: 13px;
+    font-size: 18px;
   }
 
   .hud-bottom {
@@ -451,7 +593,7 @@ kbd {
 
   .ability {
     gap: 5px;
-    font-size: 8px;
+    font-size: 18px;
   }
 
   kbd {

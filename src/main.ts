@@ -12,6 +12,18 @@ import {
   isWindWarning,
   stepGame,
 } from "./sim/game";
+import { createBenchmarkScenario } from "./sim/benchmark";
+import {
+  DEFAULT_KEY_BINDINGS,
+  KEY_ACTIONS,
+  KEY_ACTION_LABELS,
+  KEY_ALIASES,
+  findKeyBindingConflict,
+  formatKeyCode,
+  parseKeyBindings,
+  type KeyAction,
+  type KeyBindings,
+} from "./accessibility";
 import type { GameEvent, GameState, InputState, Night } from "./sim/types";
 import "./style.css";
 
@@ -33,9 +45,15 @@ const carryCount = requiredElement<HTMLElement>("carry-count");
 const carrySlots = requiredElement<HTMLDivElement>("carry-slots");
 const dashLabel = requiredElement<HTMLElement>("dash-cooldown");
 const pulseLabel = requiredElement<HTMLElement>("pulse-cooldown");
+const dashKeyLabel = requiredElement<HTMLElement>("dash-key");
+const pulseKeyLabel = requiredElement<HTMLElement>("pulse-key");
 const hint = requiredElement<HTMLDivElement>("hint");
 const arrow = requiredElement<HTMLDivElement>("arrow");
+const shadeArrow = requiredElement<HTMLDivElement>("shade-arrow");
 const windWarning = requiredElement<HTMLDivElement>("wind-warning");
+const lastSecondsWarning = requiredElement<HTMLDivElement>("last-seconds-warning");
+const lowFuelWarning = requiredElement<HTMLDivElement>("low-fuel-warning");
+const eventCaption = requiredElement<HTMLDivElement>("event-caption");
 const loading = requiredElement<HTMLDivElement>("loading");
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -134,7 +152,7 @@ const shadeMeshes = new Map<string, {
 const drifterMeshes = new Map<string, THREE.Group>();
 const charmMeshes = new Map<string, THREE.Group>();
 
-type Screen = "menu" | "intro" | "play" | "result" | "settings";
+type Screen = "menu" | "intro" | "play" | "result" | "settings" | "leaderboard";
 type SettingsReturn = "menu" | "pause";
 
 interface AudioState {
@@ -155,11 +173,25 @@ const stories: Record<Night, string> = {
   3: "Tiếng chuông vọng từ tầng mây cao: “Đêm cuối cùng đang đến. Đưa ánh sáng lên đỉnh đảo và gọi bình minh.”",
 };
 
-let game: GameState = createGame(Date.now() >>> 0);
-let screen: Screen = "menu";
+const benchmarkParams = new URLSearchParams(location.search);
+const benchmarkMode = benchmarkParams.has("benchmark");
+const benchmarkSeed = Number(benchmarkParams.get("seed") ?? 42);
+const benchmarkDuration = Number(benchmarkParams.get("duration") ?? 30);
+if (benchmarkMode && (!Number.isSafeInteger(benchmarkSeed) || benchmarkSeed < 0)) {
+  throw new Error("Benchmark seed must be a non-negative safe integer.");
+}
+if (benchmarkMode && (!Number.isSafeInteger(benchmarkDuration) || benchmarkDuration < 1 || benchmarkDuration > 600)) {
+  throw new Error("Benchmark duration must be an integer from 1 to 600 seconds.");
+}
+let game: GameState = benchmarkMode
+  ? createGame(benchmarkSeed, createBenchmarkScenario(benchmarkSeed), 1)
+  : createGame(Date.now() >>> 0);
+let screen: Screen = benchmarkMode ? "play" : "menu";
 let settingsReturn: SettingsReturn = "menu";
-let sessionActive = false;
+let sessionActive = benchmarkMode;
 let totalScore = 0;
+let nightsWon = 0;
+let runSeed = Date.now() >>> 0;
 let resultRecorded = false;
 let resumeRequested = false;
 let cameraYaw = 0;
@@ -169,13 +201,41 @@ let dragging = false;
 let lastPointerX = 0;
 let lastRenderedMode = "";
 let lastCountdownSound = -1;
+let eventCaptionUntil = 0;
 let audio: AudioState | undefined;
 let warnedMissingAudio = false;
 let volume = readSetting("dao-den-long.volume", 0.35, 0, 1);
 let sensitivity = readSetting("dao-den-long.sensitivity", 0.35, 0.1, 1);
-let colorblindMode = readBooleanSetting("dao-den-long.colorblind", false);
+let colorblindMode = benchmarkMode ? false : readBooleanSetting("dao-den-long.colorblind", false);
+const storedKeyBindings = parseKeyBindings(localStorage.getItem("dao-den-long.key-bindings"));
+let keyBindings: KeyBindings = storedKeyBindings.bindings;
+let keyBindingWarning = storedKeyBindings.warning ?? "";
+let waitingForBinding: KeyAction | undefined;
+let reducedMotion = benchmarkMode ? false : readBooleanSetting("dao-den-long.reduced-motion", false);
+let largeText = benchmarkMode ? false : readBooleanSetting("dao-den-long.large-text", false);
+let benchmarkStartedAt: number | undefined;
+let benchmarkMeasureStartedAt: number | undefined;
+let benchmarkLastFrameAt: number | undefined;
+let benchmarkFinished = false;
+const benchmarkFrameTimes: number[] = [];
+let benchmarkReadyAt = 0;
+const benchmarkWindow = window as Window & {
+  __daoDenLongBenchmarkState__?: Record<string, unknown>;
+  __daoDenLongBenchmarkReport__?: Record<string, unknown>;
+};
+const benchmarkShadeOrigins = benchmarkMode
+  ? game.shades.map((shade, index) => ({ id: shade.id, x: shade.pos[0], z: shade.pos[2], phase: index * 2.399963 }))
+  : [];
+if (benchmarkMode) {
+  camera.position.set(30, 15, 0);
+  camera.lookAt(0, 0, 0);
+}
 
 root.classList.toggle("colorblind-mode", colorblindMode);
+root.classList.toggle("reduced-motion", reducedMotion);
+root.classList.toggle("large-text", largeText);
+
+if (keyBindingWarning) console.warn(keyBindingWarning);
 
 function readBooleanSetting(key: string, fallback: boolean): boolean {
   const raw = localStorage.getItem(key);
@@ -628,9 +688,13 @@ function syncEntities(now: number): void {
   }
 }
 
+function isBoundKeyDown(action: KeyAction): boolean {
+  return keys.has(keyBindings[action]) || (KEY_ALIASES[action] ?? []).some((alias) => keys.has(alias));
+}
+
 function getInput(): InputState {
-  let x = Number(keys.has("KeyD") || keys.has("ArrowRight")) - Number(keys.has("KeyA") || keys.has("ArrowLeft"));
-  let z = Number(keys.has("KeyW") || keys.has("ArrowUp")) - Number(keys.has("KeyS") || keys.has("ArrowDown"));
+  let x = Number(isBoundKeyDown("right")) - Number(isBoundKeyDown("left"));
+  let z = Number(isBoundKeyDown("up")) - Number(isBoundKeyDown("down"));
   const magnitude = Math.hypot(x, z);
   if (magnitude > 1) {
     x /= magnitude;
@@ -640,11 +704,11 @@ function getInput(): InputState {
     ...createDefaultInput(),
     move: [x, z],
     cam_yaw_deg: cameraYaw,
-    jump: keys.has("Space"),
-    interact: keys.has("KeyE"),
-    pulse: keys.has("KeyQ"),
-    dash: keys.has("ShiftLeft") || keys.has("ShiftRight"),
-    pause: resumeRequested || (screen !== "settings" && (keys.has("Escape") || keys.has("KeyP"))),
+    jump: isBoundKeyDown("jump"),
+    interact: isBoundKeyDown("interact"),
+    pulse: isBoundKeyDown("pulse"),
+    dash: isBoundKeyDown("dash"),
+    pause: resumeRequested || (screen !== "settings" && isBoundKeyDown("pause")),
   };
 }
 
@@ -652,13 +716,80 @@ function formatSeconds(value: number): string {
   return (value / TICK_RATE).toFixed(1);
 }
 
-function updateLanternArrow(): void {
-  const lantern = getNearestReceivableLantern(game);
-  if (!lantern) {
-    arrow.hidden = true;
+function percentile(values: number[], fraction: number): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)] ?? 0;
+}
+
+function getOnePercentLowFps(frameTimes: number[]): number {
+  if (frameTimes.length === 0) return 0;
+  const slowestFrames = [...frameTimes].sort((left, right) => right - left);
+  const sampleCount = Math.max(1, Math.ceil(slowestFrames.length * 0.01));
+  const averageSlowFrameMs = slowestFrames.slice(0, sampleCount).reduce((sum, frameTime) => sum + frameTime, 0) / sampleCount;
+  return Math.round((1000 / averageSlowFrameMs) * 100) / 100;
+}
+
+function publishBenchmarkReport(): void {
+  const context = renderer.getContext();
+  const debugInfo = context.getExtension("WEBGL_debug_renderer_info");
+  const rendererName = debugInfo
+    ? String(context.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL))
+    : String(context.getParameter(context.RENDERER));
+  const userAgent = navigator.userAgent;
+  const operatingSystem = userAgent.includes("Windows")
+    ? "Windows"
+    : userAgent.includes("Mac OS")
+      ? "macOS"
+      : userAgent.includes("Linux")
+        ? "Linux"
+        : "Unknown";
+  const p95FrameTimeMs = percentile(benchmarkFrameTimes, 0.95);
+  benchmarkWindow.__daoDenLongBenchmarkReport__ = {
+    contract_version: "1.3",
+    seed: benchmarkSeed,
+    average_fps: Math.round((benchmarkFrameTimes.length / benchmarkDuration) * 100) / 100,
+    one_percent_low_fps: getOnePercentLowFps(benchmarkFrameTimes),
+    p95_frame_time_ms: Math.round(p95FrameTimeMs * 100) / 100,
+    frame_count: benchmarkFrameTimes.length,
+    load_time_s: Math.round((benchmarkReadyAt / 1000) * 100) / 100,
+    peak_rss_mb: null,
+    peak_rss_note: "The browser runner does not expose portable browser-process RSS sampling.",
+    vsync_disabled: true,
+    vsync_control: "Requested with Chromium --disable-frame-rate-limit and --disable-gpu-vsync flags.",
+    renderer: rendererName,
+    os: operatingSystem,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    fullscreen: document.fullscreenElement !== null,
+    warmup_s: 3,
+    duration_s: benchmarkDuration,
+  };
+}
+
+function updateBenchmarkMetrics(now: number): void {
+  if (!benchmarkMode || benchmarkFinished || benchmarkStartedAt === undefined) return;
+  if (benchmarkMeasureStartedAt === undefined) {
+    if (now - benchmarkStartedAt >= 3000) {
+      benchmarkMeasureStartedAt = now;
+      benchmarkLastFrameAt = now;
+    }
     return;
   }
-  const world = new THREE.Vector3(lantern.pos[0], lantern.pos[1] + 1.5, lantern.pos[2]).project(camera);
+  if (now - benchmarkMeasureStartedAt >= benchmarkDuration * 1000) {
+    benchmarkFinished = true;
+    publishBenchmarkReport();
+    return;
+  }
+  if (benchmarkLastFrameAt !== undefined) benchmarkFrameTimes.push(now - benchmarkLastFrameAt);
+  benchmarkLastFrameAt = now;
+}
+
+function updateEdgeArrow(element: HTMLDivElement, position: [number, number, number] | undefined, labelText: string): void {
+  if (!position) {
+    element.hidden = true;
+    return;
+  }
+  const world = new THREE.Vector3(position[0], position[1] + 1.5, position[2]).project(camera);
   let dx = world.x;
   let dy = -world.y;
   if (world.z > 1) {
@@ -666,7 +797,7 @@ function updateLanternArrow(): void {
     dy *= -1;
   }
   if (Math.abs(dx) <= 0.88 && Math.abs(dy) <= 0.82 && world.z <= 1) {
-    arrow.hidden = true;
+    element.hidden = true;
     return;
   }
   const directionLength = Math.hypot(dx, dy) || 1;
@@ -675,19 +806,36 @@ function updateLanternArrow(): void {
   const edgeX = Math.max(34, window.innerWidth / 2 - 36);
   const edgeY = Math.max(70, window.innerHeight / 2 - 60);
   const scale = Math.min(edgeX / Math.max(0.001, Math.abs(dx)), edgeY / Math.max(0.001, Math.abs(dy)));
-  arrow.style.left = `${window.innerWidth / 2 + dx * scale}px`;
-  arrow.style.top = `${window.innerHeight / 2 + dy * scale}px`;
-  arrow.style.transform = `translate(-50%, -50%) rotate(${Math.atan2(dy, dx)}rad)`;
-  const label = arrow.querySelector("small");
-  if (label) label.textContent = lantern.id;
-  arrow.hidden = false;
+  element.style.left = `${window.innerWidth / 2 + dx * scale}px`;
+  element.style.top = `${window.innerHeight / 2 + dy * scale}px`;
+  element.style.transform = `translate(-50%, -50%) rotate(${Math.atan2(dy, dx)}rad)`;
+  const label = element.querySelector("small");
+  if (label) label.textContent = labelText;
+  element.hidden = false;
+}
+
+function updateLanternArrow(): void {
+  const lantern = getNearestReceivableLantern(game);
+  updateEdgeArrow(arrow, lantern ? lantern.pos : undefined, lantern?.id ?? "");
+}
+
+function updateShadeArrow(): void {
+  const shade = game.shades
+    .filter((candidate) => candidate.state === "spawning")
+    .sort((left, right) =>
+      Math.hypot(left.pos[0] - game.player.pos[0], left.pos[2] - game.player.pos[2])
+      - Math.hypot(right.pos[0] - game.player.pos[0], right.pos[2] - game.player.pos[2]),
+    )[0];
+  updateEdgeArrow(shadeArrow, shade?.pos, shade ? `BÓNG ${shade.id}` : "");
 }
 
 function updateHud(): void {
   const seconds = Math.max(0, Math.ceil(getTimeLeftSeconds(game)));
   const minutes = Math.floor(seconds / 60);
   timeLabel.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  timeLabel.classList.toggle("urgent", seconds <= 30);
+  timeLabel.classList.toggle("urgent", seconds <= 10);
+  lastSecondsWarning.hidden = seconds > 10 || seconds <= 0;
+  lastSecondsWarning.textContent = seconds <= 10 && seconds > 0 ? `10 GIÂY CUỐI · ${seconds}` : "10 GIÂY CUỐI";
   nightLabel.textContent = `ĐÊM ${game.night} · ${nightNames[game.night]}`;
   flamesLabel.textContent = "✦ ".repeat(Math.max(0, game.player.flames)).trim() || "0";
   lanternsLabel.textContent = `${countLitLanterns(game)} / ${game.lanterns.length}`;
@@ -701,6 +849,8 @@ function updateHud(): void {
   dashLabel.textContent = game.player.dashCooldownTicks > 0
     ? `LƯỚT ${formatSeconds(game.player.dashCooldownTicks)}s`
     : "LƯỚT SẴN SÀNG";
+  dashKeyLabel.textContent = formatKeyCode(keyBindings.dash);
+  pulseKeyLabel.textContent = formatKeyCode(keyBindings.pulse);
   pulseLabel.textContent = game.player.pulseCooldownTicks > 0
     ? `TỎA SÁNG ${formatSeconds(game.player.pulseCooldownTicks)}s`
     : `TỎA SÁNG ${game.player.carried >= TUNING.pulse_cost ? "SẴN SÀNG" : "3 ĐOM ĐÓM"}`;
@@ -708,25 +858,31 @@ function updateHud(): void {
   const nearbyLantern = getNearestReceivableLantern(game);
   const action = nearbyLantern?.lit ? "Châm dầu" : "Nạp ánh sáng";
   hint.textContent = nearbyLantern && isWithinLanternRange(game.player.pos, nearbyLantern)
-    ? `E — ${action} (${game.player.carried}/${capacity})`
+    ? `${formatKeyCode(keyBindings.interact)} — ${action} (${game.player.carried}/${capacity})`
     : "";
   windWarning.hidden = !isWindWarning(game);
   windWarning.textContent = `${colorblindMode ? "⚠ " : ""}GIÓ MẠNH SẮP ĐẾN`;
+  lowFuelWarning.hidden = !game.lanterns.some((lantern) =>
+    lantern.lit && lantern.fuelUnits < TUNING.low_fuel_threshold * TICK_RATE,
+  );
+  if (performance.now() > eventCaptionUntil) eventCaption.textContent = "";
   updateLanternArrow();
+  updateShadeArrow();
 }
 
 function screenMarkup(mode: Screen | "pause"): string {
   if (mode === "menu") {
     return `<article class="panel">
-      <p class="eyebrow">Day 12 · AI SDLC · Phase 3</p>
+      <p class="eyebrow">Day 12 · AI SDLC · Phase 4</p>
       <h1>ĐẢO ĐÈN LỒNG</h1>
       <h2>Ba hòn đảo · Ba đêm</h2>
       <p class="story">Mây phải giữ đảo sáng tới bình minh: thu gom đom đóm, thắp và châm dầu cho đèn, rồi ngăn Bóng Mực hút cạn ánh sáng.</p>
       <div class="menu-actions">
         <button class="game-button" data-action="start">Bắt đầu hành trình</button>
         <button class="game-button secondary" data-action="settings">Cài đặt</button>
+        <button class="game-button secondary" data-action="leaderboard">Bảng xếp hạng</button>
       </div>
-      <p class="story">WASD di chuyển · Space nhảy · Shift lướt · E nạp đèn · Q tỏa sáng · Esc/P tạm dừng</p>
+      <p class="story">${formatKeyCode(keyBindings.up)}/${formatKeyCode(keyBindings.left)}/${formatKeyCode(keyBindings.down)}/${formatKeyCode(keyBindings.right)} di chuyển · ${formatKeyCode(keyBindings.jump)} nhảy · ${formatKeyCode(keyBindings.dash)} lướt · ${formatKeyCode(keyBindings.interact)} nạp đèn · ${formatKeyCode(keyBindings.pulse)} tỏa sáng · ${formatKeyCode(keyBindings.pause)} tạm dừng</p>
     </article>`;
   }
   if (mode === "intro") {
@@ -754,18 +910,38 @@ function screenMarkup(mode: Screen | "pause"): string {
     </article>`;
   }
   if (mode === "settings") {
-    return `<article class="panel">
+    return `<article class="panel settings-panel">
       <p class="eyebrow">Cài đặt · được lưu trên thiết bị</p>
-      <h1>ÂM THANH & HIỂN THỊ</h1>
+      <h1>ĐIỀU KHIỂN & HIỂN THỊ</h1>
       <label class="range-field"><span>Âm lượng <output id="volume-value">${Math.round(volume * 100)}%</output></span>
         <input id="volume-setting" type="range" min="0" max="1" step="0.01" value="${volume}"></label>
       <label class="range-field"><span>Độ nhạy chuột <output id="sensitivity-value">${Math.round(sensitivity * 100)}%</output></span>
         <input id="sensitivity-setting" type="range" min="0.1" max="1" step="0.01" value="${sensitivity}"></label>
       <label class="check-field"><span>Bảng màu dễ phân biệt</span>
         <input id="colorblind-setting" type="checkbox"${colorblindMode ? " checked" : ""}></label>
+      <label class="check-field"><span>Giảm chuyển động và nhấp nháy</span>
+        <input id="reduced-motion-setting" type="checkbox"${reducedMotion ? " checked" : ""}></label>
+      <label class="check-field"><span>Chữ lớn ×1.25</span>
+        <input id="large-text-setting" type="checkbox"${largeText ? " checked" : ""}></label>
+      <h2>GÁN PHÍM</h2>
+      <div class="key-bindings">${KEY_ACTIONS.map((action) =>
+        `<button class="game-button secondary binding-button" data-action="rebind" data-binding="${action}">
+          <span>${KEY_ACTION_LABELS[action]}</span><kbd>${formatKeyCode(keyBindings[action])}</kbd>
+        </button>`,
+      ).join("")}</div>
+      <p id="binding-status" class="binding-status" role="status" aria-live="polite">${keyBindingWarning}</p>
       <div class="menu-actions">
+        <button class="game-button secondary" data-action="reset-bindings">Khôi phục phím mặc định</button>
         <button class="game-button" data-action="settings-back">Quay lại</button>
       </div>
+    </article>`;
+  }
+  if (mode === "leaderboard") {
+    return `<article class="panel leaderboard-panel">
+      <p class="eyebrow">Bảng xếp hạng · lưu trên thiết bị</p>
+      <h1>NHỮNG NGỌN ĐÈN SÁNG NHẤT</h1>
+      <div id="leaderboard-content" role="status" aria-live="polite">Đang tải bảng xếp hạng…</div>
+      <div class="menu-actions"><button class="game-button" data-action="menu">Về menu</button></div>
     </article>`;
   }
   if (game.status === "won" && game.night === 3) {
@@ -773,7 +949,16 @@ function screenMarkup(mode: Screen | "pause"): string {
       <p class="eyebrow">Mây đã giữ đủ ánh sáng tới bình minh</p>
       <h1>BÌNH MINH</h1>
       <p class="story">Tổng điểm ba Đêm: <strong>${totalScore}</strong></p>
-      <div class="menu-actions"><button class="game-button" data-action="menu">Về menu</button></div>
+      <form class="leaderboard-form" id="leaderboard-form">
+        <label for="leaderboard-name">Tên xếp hạng (3–12 chữ ASCII)</label>
+        <input id="leaderboard-name" name="name" minlength="3" maxlength="12" pattern="[A-Za-z0-9_]{3,12}" autocomplete="off" required>
+        <button class="game-button" type="submit">Lưu điểm</button>
+        <p id="leaderboard-status" role="status" aria-live="polite"></p>
+      </form>
+      <div class="menu-actions">
+        <button class="game-button secondary" data-action="leaderboard">Bảng xếp hạng</button>
+        <button class="game-button secondary" data-action="menu">Về menu</button>
+      </div>
     </article>`;
   }
   if (game.status === "won") {
@@ -790,9 +975,16 @@ function screenMarkup(mode: Screen | "pause"): string {
   return `<article class="panel">
     <p class="eyebrow">Đêm ${game.night} · ${nightNames[game.night]}</p>
     <h1>${game.reason === "dawn" ? "BÌNH MINH ĐÃ ĐẾN" : "ĐÊM TỐI THẮNG"}</h1>
-    <p class="story">${game.reason === "dawn" ? `Chỉ còn ${countLitLanterns(game)} / ${game.lanterns.length} đèn sáng; cần ${Math.ceil(TUNING.win_ratio * game.lanterns.length)} để giữ đảo đến bình minh.` : `Mây còn ${game.player.flames} Ngọn Lửa.`} Điểm đang có: ${game.score}. Hãy thử lại Đêm này.</p>
+    <p class="story">${game.reason === "dawn" ? `Chỉ còn ${countLitLanterns(game)} / ${game.lanterns.length} đèn sáng; cần ${Math.ceil(TUNING.win_ratio * game.lanterns.length)} để giữ đảo đến bình minh.` : `Mây còn ${game.player.flames} Ngọn Lửa.`} Điểm Đêm này: ${game.score} · Tổng điểm: ${totalScore + game.score}. Hãy thử lại Đêm này.</p>
+    <form class="leaderboard-form" id="leaderboard-form">
+      <label for="leaderboard-name">Tên xếp hạng (3–12 chữ ASCII)</label>
+      <input id="leaderboard-name" name="name" minlength="3" maxlength="12" pattern="[A-Za-z0-9_]{3,12}" autocomplete="off" required>
+      <button class="game-button" type="submit">Lưu điểm</button>
+      <p id="leaderboard-status" role="status" aria-live="polite"></p>
+    </form>
     <div class="menu-actions">
       <button class="game-button" data-action="retry">Chơi lại Đêm ${game.night}</button>
+      <button class="game-button secondary" data-action="leaderboard">Bảng xếp hạng</button>
       <button class="game-button secondary" data-action="menu">Về menu</button>
     </div>
   </article>`;
@@ -858,11 +1050,14 @@ function loadNight(night: Night): void {
 
 function startNewRun(): void {
   totalScore = 0;
+  nightsWon = 0;
+  runSeed = Date.now() >>> 0;
   loadNight(1);
 }
 
 function returnToMenu(): void {
   totalScore = 0;
+  nightsWon = 0;
   game = createGame(Date.now() >>> 0);
   sessionActive = false;
   screen = "menu";
@@ -886,7 +1081,10 @@ function beginNight(): void {
 function handleGameOver(): void {
   if (resultRecorded || (game.status !== "won" && game.status !== "lost")) return;
   resultRecorded = true;
-  if (game.status === "won") totalScore += game.score;
+  if (game.status === "won") {
+    totalScore += game.score;
+    nightsWon += 1;
+  }
   screen = "result";
   sessionActive = false;
   renderScreen();
@@ -906,14 +1104,132 @@ function updateSettingsInput(target: EventTarget | null): void {
     if (output) output.textContent = `${Math.round(sensitivity * 100)}%`;
   } else if (target.id === "colorblind-setting") {
     setColorblindMode(target.checked);
+  } else if (target.id === "reduced-motion-setting") {
+    reducedMotion = target.checked;
+    root.classList.toggle("reduced-motion", reducedMotion);
+    localStorage.setItem("dao-den-long.reduced-motion", String(reducedMotion));
+  } else if (target.id === "large-text-setting") {
+    largeText = target.checked;
+    root.classList.toggle("large-text", largeText);
+    localStorage.setItem("dao-den-long.large-text", String(largeText));
+  }
+}
+
+interface LeaderboardRecord {
+  name: string;
+  score: number;
+  nights_won: number;
+  achieved_at: string;
+  seed: number;
+}
+
+function showLeaderboard(): void {
+  screen = "leaderboard";
+  lastRenderedMode = "";
+  renderScreen();
+  void loadLeaderboard();
+}
+
+async function loadLeaderboard(): Promise<void> {
+  const content = document.getElementById("leaderboard-content");
+  if (!content) return;
+  try {
+    const response = await fetch("/api/leaderboard");
+    const payload = await response.json() as { entries?: LeaderboardRecord[]; error?: string };
+    if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
+    const entries = payload.entries ?? [];
+    content.replaceChildren();
+    if (entries.length === 0) {
+      content.textContent = "Chưa có điểm nào được lưu trên thiết bị này.";
+      return;
+    }
+    const table = document.createElement("table");
+    table.className = "leaderboard-table";
+    const header = document.createElement("tr");
+    for (const title of ["HẠNG", "TÊN", "ĐIỂM", "ĐÊM THẮNG", "NGÀY"]) {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = title;
+      header.append(cell);
+    }
+    const head = document.createElement("thead");
+    head.append(header);
+    table.append(head);
+    const body = document.createElement("tbody");
+    entries.forEach((entry, index) => {
+      const row = document.createElement("tr");
+      const values = [
+        String(index + 1),
+        entry.name,
+        String(entry.score),
+        String(entry.nights_won),
+        new Date(entry.achieved_at).toLocaleDateString(),
+      ];
+      for (const value of values) {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.append(cell);
+      }
+      body.append(row);
+    });
+    table.append(body);
+    content.append(table);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Unable to load leaderboard:", error);
+    content.textContent = `Không tải được bảng xếp hạng: ${message}`;
+  }
+}
+
+async function submitLeaderboardEntry(form: HTMLFormElement): Promise<void> {
+  const input = form.querySelector<HTMLInputElement>("#leaderboard-name");
+  const status = form.querySelector<HTMLElement>("#leaderboard-status");
+  const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+  if (!input || !status || !submit || !form.reportValidity()) return;
+  submit.disabled = true;
+  status.textContent = "Đang lưu…";
+  try {
+    const response = await fetch("/api/leaderboard", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: input.value,
+        score: game.status === "won" ? totalScore : totalScore + game.score,
+        nights_won: nightsWon,
+        seed: runSeed,
+      }),
+    });
+    const payload = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
+    status.textContent = "Đã lưu điểm vào bảng xếp hạng trên thiết bị này.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Unable to save leaderboard entry:", error);
+    status.textContent = `Không thể lưu điểm: ${message}`;
+  } finally {
+    submit.disabled = false;
   }
 }
 
 overlay.addEventListener("input", (event) => updateSettingsInput(event.target));
+overlay.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement) || form.id !== "leaderboard-form") return;
+  event.preventDefault();
+  void submitLeaderboardEntry(form);
+});
 overlay.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
   const action = button?.dataset.action;
   if (!action) return;
+  if (action === "rebind") {
+    const binding = KEY_ACTIONS.find((candidate) => candidate === button.dataset.binding);
+    if (!binding) return;
+    waitingForBinding = binding;
+    const status = document.getElementById("binding-status");
+    if (status) status.textContent = `Nhấn phím mới cho “${KEY_ACTION_LABELS[binding]}”.`;
+    return;
+  }
   if (action === "start") startNewRun();
   else if (action === "begin") beginNight();
   else if (action === "continue") {
@@ -924,19 +1240,44 @@ overlay.addEventListener("click", (event) => {
   } else if (action === "next") loadNight((game.night + 1) as Night);
   else if (action === "retry") loadNight(game.night);
   else if (action === "menu") returnToMenu();
+  else if (action === "leaderboard") showLeaderboard();
   else if (action === "settings") {
     settingsReturn = screen === "menu" ? "menu" : "pause";
     screen = "settings";
     lastRenderedMode = "";
     renderScreen();
   } else if (action === "settings-back") {
+    waitingForBinding = undefined;
     screen = settingsReturn === "menu" ? "menu" : "play";
+    lastRenderedMode = "";
+    renderScreen();
+  } else if (action === "reset-bindings") {
+    keyBindings = { ...DEFAULT_KEY_BINDINGS };
+    keyBindingWarning = "";
+    waitingForBinding = undefined;
+    localStorage.setItem("dao-den-long.key-bindings", JSON.stringify(keyBindings));
     lastRenderedMode = "";
     renderScreen();
   }
 });
 
 function updateWorldAndCamera(now: number): void {
+  if (benchmarkMode) {
+    const elapsed = benchmarkStartedAt === undefined ? 0 : (now - benchmarkStartedAt) / 1000;
+    const angle = (2 * Math.PI * elapsed) / 15;
+    camera.position.set(30 * Math.cos(angle), 15, 30 * Math.sin(angle));
+    camera.lookAt(game.player.pos[0], game.player.pos[1], game.player.pos[2]);
+    syncEntities(now);
+    for (const origin of benchmarkShadeOrigins) {
+      const shadeMesh = shadeMeshes.get(origin.id);
+      if (!shadeMesh) continue;
+      shadeMesh.group.position.x = origin.x + Math.cos(elapsed * 0.55 + origin.phase) * 0.45;
+      shadeMesh.group.position.z = origin.z + Math.sin(elapsed * 0.55 + origin.phase) * 0.45;
+    }
+    playerGroup.position.set(game.player.pos[0], game.player.pos[1], game.player.pos[2]);
+    playerGroup.rotation.y = game.player.facingYaw;
+    return;
+  }
   syncEntities(now);
   playerGroup.position.set(game.player.pos[0], game.player.pos[1], game.player.pos[2]);
   playerGroup.rotation.y = game.player.facingYaw;
@@ -969,7 +1310,7 @@ function updateWorldAndCamera(now: number): void {
   const yaw = (cameraYaw * Math.PI) / 180;
   const targetX = game.player.pos[0] - Math.sin(yaw) * distance;
   const targetZ = game.player.pos[2] - Math.cos(yaw) * distance;
-  camera.position.lerp(new THREE.Vector3(targetX, game.player.pos[1] + height, targetZ), 0.12);
+  camera.position.lerp(new THREE.Vector3(targetX, game.player.pos[1] + height, targetZ), reducedMotion ? 1 : 0.12);
   camera.lookAt(game.player.pos[0], game.player.pos[1] + 1.05, game.player.pos[2]);
 }
 
@@ -982,15 +1323,21 @@ function updateCountdownAudio(): void {
 }
 
 function renderFrame(now: number): void {
+  if (benchmarkMode && benchmarkStartedAt === undefined) benchmarkStartedAt = now;
   const delta = Math.min((now - previousTime) / 1000, 0.1);
   previousTime = now;
   accumulator += delta;
   const fixedStep = 1 / TICK_RATE;
 
-  while (accumulator >= fixedStep && sessionActive && (game.status === "playing" || game.status === "paused")) {
+  while (!benchmarkMode && accumulator >= fixedStep && sessionActive && (game.status === "playing" || game.status === "paused")) {
     const wasWindActive = game.wind.active;
     const events = stepGame(game, getInput());
     handleAudioEvents(events);
+    const shadeSpawn = events.find((event) => event.name === "shade_spawned");
+    if (shadeSpawn) {
+      eventCaption.textContent = `BÓNG MỰC ${String(shadeSpawn.data.id)} VỪA XUẤT HIỆN`;
+      eventCaptionUntil = performance.now() + 4000;
+    }
     if (!wasWindActive && game.wind.active) playTone(174, 0.32, "triangle");
     if (resumeRequested) resumeRequested = false;
     updateCountdownAudio();
@@ -1002,10 +1349,34 @@ function renderFrame(now: number): void {
   updateHud();
   renderScreen();
   renderer.render(scene, camera);
+  updateBenchmarkMetrics(now);
   requestAnimationFrame(renderFrame);
 }
 
 window.addEventListener("keydown", (event) => {
+  if (waitingForBinding) {
+    event.preventDefault();
+    const action = waitingForBinding;
+    if (!/^[A-Za-z][A-Za-z0-9]{0,19}$/.test(event.code)) {
+      const status = document.getElementById("binding-status");
+      if (status) status.textContent = "Phím này không thể gán. Hãy thử phím khác.";
+      return;
+    }
+    const conflict = findKeyBindingConflict(keyBindings, action, event.code);
+    if (conflict) {
+      keyBindingWarning = `Phím ${formatKeyCode(event.code)} đã được gán cho ${KEY_ACTION_LABELS[conflict]}.`;
+      const status = document.getElementById("binding-status");
+      if (status) status.textContent = keyBindingWarning;
+      return;
+    }
+    keyBindings = { ...keyBindings, [action]: event.code };
+    keyBindingWarning = "";
+    waitingForBinding = undefined;
+    localStorage.setItem("dao-den-long.key-bindings", JSON.stringify(keyBindings));
+    lastRenderedMode = "";
+    renderScreen();
+    return;
+  }
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
     event.preventDefault();
   }
@@ -1038,6 +1409,26 @@ window.addEventListener("resize", () => {
 
 buildWorld();
 rebuildLanterns();
+if (benchmarkMode) {
+  benchmarkReadyAt = performance.now();
+  benchmarkWindow.__daoDenLongBenchmarkState__ = {
+    seed: benchmarkSeed,
+    night: game.night,
+    player: [...game.player.pos],
+    motes: game.motes.length,
+    shades: game.shades.length,
+    wandering_shades: game.shades.filter((shade) => shade.state === "wander").length,
+    random_motes: game.randomMotes,
+    random_shades: game.randomShades,
+    random_drifters: game.randomDrifters,
+    wind_enabled: game.windEnabled,
+    lanterns: game.lanterns.map((lantern) => ({
+      id: lantern.id,
+      lit: lantern.lit,
+      fuel: lantern.fuelUnits / TICK_RATE,
+    })),
+  };
+}
 loading.remove();
 renderScreen();
 requestAnimationFrame(renderFrame);

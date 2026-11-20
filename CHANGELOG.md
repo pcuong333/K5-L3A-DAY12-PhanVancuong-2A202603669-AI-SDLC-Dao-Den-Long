@@ -1,5 +1,30 @@
 # Changelog
 
+## Phase 1 — playable prototype (Test Contract v1.0)
+
+- Added the original 3D island scene, Mây movement and jumping, lantern/mote collection, Shade encounters, pulse, score, and the first browser HUD.
+- Established the deterministic 60 Hz simulation and JSONL headless runner with seeded scenarios and regression tests.
+
+## Phase 2 — three islands (Test Contract v1.1)
+
+- Added three distinct night maps, dash, wind and charms, drifters, pause/resume, the three-night menu/results flow, synthesized audio, and persisted volume/camera settings.
+- Extended the shared simulation and headless contract while retaining Phase 1 regressions.
+
+## Phase 3 — lantern fuel (Test Contract v1.2)
+
+- Added integer-tick lantern fuel, refueling/relighting, Shade fuel drain, dawn survival, dynamic carrying capacity, updated scoring, and a persisted color-vision setting.
+- Preserved the headless simulation contract and its Phase 1–2 regressions.
+
+## Phase 4 — release readiness (Test Contract v1.3)
+
+- Added a deterministic browser benchmark runner and ten-night deterministic soak runner; the benchmark scene contains 200 wandering Shades, 100 motes, and three fully fueled lamps.
+- Added local disk-backed leaderboard submission, top-ten ranking, and JSON export through the same-origin server.
+- Added persistent key rebinding with duplicate detection/default restoration, large text, reduced motion, and HUD indicators for spawning Shades, wind, the final ten seconds, and low fuel.
+- Raised minimum HUD and settings text to 18 px and documented clean install, production launch, tests, headless, benchmark, soak, credits, and rights.
+- Added a reproducible browser demo recorder; captured `docs/demo/phase-4.mp4` from a 44.8-second live browser session.
+
+## Historical Phase 3 notes
+
 ## Phase 3 — Test Contract v1.2
 
 ### Breaking changes

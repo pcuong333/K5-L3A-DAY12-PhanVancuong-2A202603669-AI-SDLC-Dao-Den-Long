@@ -1,13 +1,18 @@
 {
   "name": "dao-den-long",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "tsx src/server.ts --dev",
+    "start": "tsx src/server.ts --production",
     "build": "tsc -b && vite build",
     "test": "vitest run",
-    "headless": "tsx src/headless.ts"
+    "headless": "tsx src/headless.ts",
+    "soak": "tsx src/soak.ts",
+    "bench": "tsx src/bench.ts",
+    "export-leaderboard": "tsx src/server.ts --export-leaderboard",
+    "record-demo": "tsx src/record-demo.ts"
   },
   "dependencies": {
     "three": "^0.180.0"
@@ -15,9 +20,11 @@
   "devDependencies": {
     "@types/node": "^22.15.0",
     "@types/three": "^0.180.0",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vite": "^6.3.0",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "ws": "^8.23.0"
   }
 }

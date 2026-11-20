@@ -1,0 +1,22 @@
+{
+  "contract_version": "1.3",
+  "seed": 42,
+  "average_fps": 38.03,
+  "one_percent_low_fps": 2.99,
+  "p95_frame_time_ms": 212.4,
+  "frame_count": 1141,
+  "load_time_s": 0.56,
+  "peak_rss_mb": null,
+  "peak_rss_note": "The browser runner does not expose portable browser-process RSS sampling.",
+  "vsync_disabled": true,
+  "vsync_control": "Requested with Chromium --disable-frame-rate-limit and --disable-gpu-vsync flags.",
+  "renderer": "ANGLE (AMD, AMD Radeon(TM) 610M (0x0000164E) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "os": "Windows",
+  "width": 1280,
+  "height": 720,
+  "fullscreen": false,
+  "warmup_s": 3,
+  "duration_s": 30,
+  "browser": "msedge.exe",
+  "window_mode": "window"
+}

@@ -1,36 +1,46 @@
-# Đảo Đèn Lồng — Phase 3
+# Đảo Đèn Lồng — v1.0.0 · Phase 4
 
-> **Video Phase 1 (0:47):** [Xem gameplay](docs/demo/demo.mp4)
+> **Phase 4 gameplay demo (0:45):** [Xem MP4](docs/demo/phase-4.mp4) · **Benchmark scene (1280×720):** [Xem ảnh](docs/proof/phase-4-gameplay.png) · [Video Phase 1 (0:47)](docs/demo/demo.mp4)
 
-Game 3D góc nhìn thứ ba qua ba đêm: điều khiển Mây thu thập đom đóm, thắp và châm dầu cho các Đèn Lồng Lớn, rồi giữ đủ đèn sáng tới bình minh trong khi tránh Bóng Mực và Gió Lạc.
+Game 3D góc nhìn thứ ba qua ba đêm: điều khiển Mây thu thập đom đóm, thắp và châm dầu cho các Đèn Lồng Lớn, rồi giữ đủ đèn sáng tới bình minh trong khi tránh Bóng Mực và Gió Lạc. Luật game nằm trong simulation TypeScript dùng chung bởi browser và headless mode.
 
-## Chạy game
+## Yêu cầu hệ thống
 
-Cần Node.js 20 trở lên. Trong PowerShell trên Windows, dùng `npm.cmd` vì script `npm.ps1` có thể bị Execution Policy chặn. Trên macOS/Linux, dùng `npm` thay cho `npm.cmd`.
+- Node.js 20 trở lên; npm đi kèm.
+- Trình duyệt desktop hỗ trợ WebGL 2 (Edge, Chrome hoặc Firefox).
+- Windows, macOS hoặc Linux. Benchmark cần Chromium/Edge; nếu dò tự động không thấy trình duyệt, truyền `--browser <đường-dẫn>`.
+- Máy cần tăng tốc đồ họa WebGL để đạt hiệu năng tốt; kết quả benchmark tùy phần cứng.
+
+## Cài đặt và chạy
+
+Trong PowerShell trên Windows dùng `npm.cmd` vì Execution Policy có thể chặn `npm.ps1`; trên macOS/Linux dùng `npm`.
 
 ```bash
 npm.cmd install
-npm.cmd run dev
+npm.cmd run build
+npm.cmd start
 ```
 
-Mở URL Vite hiển thị trong terminal. Build production bằng `npm.cmd run build`; chạy test bằng `npm.cmd test`.
+Mở `http://127.0.0.1:4173`. Trong lúc phát triển, chạy `npm.cmd run dev` (hoặc `npm run dev`) và mở URL hiện trên terminal.
 
-### Điều khiển
+## Điều khiển và accessibility
 
 - `WASD` / phím mũi tên: di chuyển; `Space`: nhảy; `Shift`: lướt.
 - `E`: thắp đèn mới (10 đom đóm), thắp lại (5), hoặc châm dầu (mỗi đom đóm thêm tối đa 10 fuel).
 - `Q`: tỏa sáng, tiêu hao 3 đom đóm để đẩy và làm choáng mục tiêu gần.
 - `Esc` / `P`: tạm dừng; kéo chuột: xoay camera.
+- Trong **Cài đặt**, gán lại chín hành động, phát hiện trùng phím, khôi phục phím mặc định; thiết lập được lưu trên thiết bị. Có thêm bảng màu dễ phân biệt, giảm chuyển động/nhấp nháy và chữ lớn ×1.25.
 
-Trong **Cài đặt**, bật “Bảng màu dễ phân biệt” để đổi màu viền Bóng Mực và cảnh báo; lựa chọn được lưu trên thiết bị.
-
-### Headless
+## Kiểm tra, headless và đo hiệu năng
 
 ```bash
+npm.cmd test
 npm.cmd run headless -- --seed 42 --night 2 --ticks 600 --out result.jsonl
+npm.cmd run bench -- --seed 42 --duration 30 --out bench.json
+npm.cmd run soak -- --seed 7 --nights 10 --out soak.json
 ```
 
-Hỗ trợ `--night 1|2|3`, `--scenario`, `--inputs` và `--snapshot-every`. Cấu hình Test Contract v1.2 nằm trong [game.contract.json](game.contract.json); luật mới và kết quả kiểm chứng ở [docs/phase-3.md](docs/phase-3.md). Phase 1 và 2 được lưu làm lịch sử tại [docs/phase-1.md](docs/phase-1.md) và [docs/phase-2.md](docs/phase-2.md).
+Headless hỗ trợ `--night 1|2|3`, `--scenario`, `--inputs` và `--snapshot-every`. Benchmark cần browser Chromium/Edge; thêm `--headless` cho máy không có màn hình. Soak mặc định chạy 10 lượt. Contract v1.3 ở [game.contract.json](game.contract.json); kết quả, ảnh và ghi chú Phase 4 ở [docs/phase-4.md](docs/phase-4.md). Lịch sử: [Phase 1](docs/phase-1.md), [Phase 2](docs/phase-2.md), [Phase 3](docs/phase-3.md).
 
 ---
 

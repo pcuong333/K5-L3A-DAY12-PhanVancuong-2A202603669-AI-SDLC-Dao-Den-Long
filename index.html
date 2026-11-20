@@ -8,19 +8,26 @@
   </head>
   <body>
     <main id="game">
-      <div id="hud" aria-live="polite">
-        <div class="brand">ĐẢO ĐÈN LỒNG <span>ĐÊM 1 · ĐẢO BẾN</span></div>
-        <div class="stats">
-          <div class="stat"><span>ĐÈN ĐÃ THẮP</span><strong id="lanterns">0 / 5</strong></div>
-          <div class="stat"><span>ĐOM ĐÓM</span><strong id="carried">0 / 5</strong></div>
-          <div class="stat"><span>ÁNH SÁNG</span><strong id="flames">3</strong></div>
-          <div class="stat"><span>THỜI GIAN</span><strong id="time">05:00</strong></div>
+      <div id="hud" aria-live="polite" hidden>
+        <header class="hud-top">
+          <div class="stat flames-stat"><span>NGỌN LỬA</span><strong id="flames">✦ ✦ ✦</strong></div>
+          <div class="night-label"><strong>ĐẢO ĐÈN LỒNG</strong><span id="night-title">ĐÊM 1 · ĐẢO BẾN</span></div>
+          <time class="timer" id="time">05:00</time>
+          <div class="stat"><span>ĐÈN</span><strong id="lanterns">0 / 5</strong></div>
           <div class="stat"><span>ĐIỂM</span><strong id="score">0</strong></div>
+        </header>
+        <div class="hud-bottom">
+          <div class="mote-panel"><span>ĐOM ĐÓM</span><div id="carry-slots" aria-label="Đom đóm đang mang"></div></div>
+          <div class="ability-panel">
+            <div class="ability"><kbd>Shift</kbd><span id="dash-cooldown">LƯỚT —</span></div>
+            <div class="ability"><kbd>Q</kbd><span id="pulse-cooldown">TỎA SÁNG —</span></div>
+          </div>
         </div>
-        <div class="hint">WASD di chuyển · Space nhảy · E thắp đèn · Q tỏa sáng · Kéo chuột xoay camera</div>
+        <div id="hint" class="interaction-hint" aria-live="polite"></div>
+        <div id="wind-warning" class="wind-warning" hidden>GIÓ MẠNH SẮP ĐẾN</div>
+        <div id="arrow" class="lantern-arrow" hidden><span>➤</span><small></small></div>
       </div>
-      <div id="message" hidden></div>
-      <button id="restart" hidden>Chơi lại</button>
+      <section id="overlay" class="screen" aria-live="polite"></section>
       <div id="loading">Đang thắp sáng hòn đảo…</div>
     </main>
     <script type="module" src="/src/main.ts"></script>

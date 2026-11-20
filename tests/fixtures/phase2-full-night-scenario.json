@@ -1,0 +1,8 @@
+{
+  "random_motes": true,
+  "random_shades": true,
+  "random_drifters": true,
+  "wind_enabled": false,
+  "player": { "pos": [0, 6, 5], "invuln_ticks": 1000000 },
+  "charms": []
+}

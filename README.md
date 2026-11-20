@@ -1,8 +1,8 @@
-# Đảo Đèn Lồng — Phase 1
+# Đảo Đèn Lồng — Phase 2
 
-> **Video demo (0:47):** [Xem gameplay](docs/demo/demo.mp4)
+> **Video Phase 1 (0:47):** [Xem gameplay](docs/demo/demo.mp4)
 
-Game 3D góc nhìn thứ ba: điều khiển Mây thu thập đom đóm, thắp sáng năm Đèn Lồng Lớn và tránh Bóng Mực.
+Game 3D góc nhìn thứ ba qua ba đêm: điều khiển Mây thu thập đom đóm, thắp sáng các Đèn Lồng Lớn, lướt qua biển mây và tránh Bóng Mực cùng Gió Lạc.
 
 ## Chạy game
 
@@ -17,22 +17,18 @@ Mở URL Vite hiển thị trong terminal. Build production bằng `npm.cmd run 
 
 ### Điều khiển
 
-- `WASD`: di chuyển; `Space`: nhảy.
-- `E`: nạp đom đóm vào Đèn Lồng Lớn gần nhất.
-- `Q`: tỏa sáng, tiêu hao 1 ánh sáng để làm choáng Bóng Mực trong bán kính 5 m.
-- Kéo chuột: xoay camera. Sau khi thắng/thua, nhấn `R` hoặc nút **Chơi lại**.
+- `WASD` / phím mũi tên: di chuyển; `Space`: nhảy; `Shift`: lướt.
+- `E`: nạp tối đa 10 đom đóm vào Đèn Lồng Lớn gần nhất.
+- `Q`: tỏa sáng, tiêu hao 3 đom đóm để đẩy và làm choáng mục tiêu gần.
+- `Esc` / `P`: tạm dừng; kéo chuột: xoay camera.
 
 ### Headless
 
 ```bash
-npm run headless -- --seed 42 --night 1 --ticks 600 --out result.jsonl
+npm.cmd run headless -- --seed 42 --night 2 --ticks 600 --out result.jsonl
 ```
 
-Hỗ trợ `--scenario`, `--inputs` và `--snapshot-every`. Cấu hình thật của mô phỏng được khai báo trong [game.contract.json](game.contract.json); các giả định và kiểm chứng Phase 1 được ghi trong `docs/phase-1.md`.
-
-### Giả định tuning Phase 1
-
-Mây chạy 5 m/s, mang tối đa 5 đom đóm; mỗi đèn cần 5 đom đóm. Bóng Mực chạy 2 m/s, chạm trong 1 m gây mất 1 ánh sáng; sau va chạm Mây bất tử 1,5 giây và rơi 50% số đom đóm đang mang. Đêm kéo dài 300 giây. Điểm: 10/đom đóm, 100/đèn, 25/mỗi Bóng Mực bị choáng, cộng điểm thời gian và ánh sáng còn lại khi thắng.
+Hỗ trợ `--night 1|2|3`, `--scenario`, `--inputs` và `--snapshot-every`. Cấu hình mô phỏng nằm trong [game.contract.json](game.contract.json); tiêu chí Phase 2 và kết quả kiểm chứng ở [docs/phase-2.md](docs/phase-2.md). Phase 1 được giữ làm lịch sử tại [docs/phase-1.md](docs/phase-1.md).
 
 ---
 

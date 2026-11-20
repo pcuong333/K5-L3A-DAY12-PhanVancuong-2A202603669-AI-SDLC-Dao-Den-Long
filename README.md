@@ -1,6 +1,6 @@
 # Đảo Đèn Lồng — Phase 1
 
-> **Video demo (1:08):** [Xem gameplay](docs/demo/demo.mp4)
+> **Video demo (0:47):** [Xem gameplay](docs/demo/demo.mp4)
 
 Game 3D góc nhìn thứ ba: điều khiển Mây thu thập đom đóm, thắp sáng năm Đèn Lồng Lớn và tránh Bóng Mực.
 

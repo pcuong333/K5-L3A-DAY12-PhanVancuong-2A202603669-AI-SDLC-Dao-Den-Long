@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10172d" />
+    <title>Đảo Đèn Lồng</title>
+  </head>
+  <body>
+    <main id="game">
+      <div id="hud" aria-live="polite">
+        <div class="brand">ĐẢO ĐÈN LỒNG <span>ĐÊM 1 · ĐẢO BẾN</span></div>
+        <div class="stats">
+          <div class="stat"><span>ĐÈN ĐÃ THẮP</span><strong id="lanterns">0 / 5</strong></div>
+          <div class="stat"><span>ĐOM ĐÓM</span><strong id="carried">0 / 5</strong></div>
+          <div class="stat"><span>ÁNH SÁNG</span><strong id="flames">3</strong></div>
+          <div class="stat"><span>THỜI GIAN</span><strong id="time">05:00</strong></div>
+          <div class="stat"><span>ĐIỂM</span><strong id="score">0</strong></div>
+        </div>
+        <div class="hint">WASD di chuyển · Space nhảy · E thắp đèn · Q tỏa sáng · Kéo chuột xoay camera</div>
+      </div>
+      <div id="message" hidden></div>
+      <button id="restart" hidden>Chơi lại</button>
+      <div id="loading">Đang thắp sáng hòn đảo…</div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

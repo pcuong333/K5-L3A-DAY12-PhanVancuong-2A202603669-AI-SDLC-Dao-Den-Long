@@ -1,3 +1,39 @@
+# Đảo Đèn Lồng — Phase 1
+
+Game 3D góc nhìn thứ ba: điều khiển Mây thu thập đom đóm, thắp sáng năm Đèn Lồng Lớn và tránh Bóng Mực.
+
+## Chạy game
+
+Cần Node.js 20 trở lên. Trong PowerShell trên Windows, dùng `npm.cmd` vì script `npm.ps1` có thể bị Execution Policy chặn. Trên macOS/Linux, dùng `npm` thay cho `npm.cmd`.
+
+```bash
+npm.cmd install
+npm.cmd run dev
+```
+
+Mở URL Vite hiển thị trong terminal. Build production bằng `npm.cmd run build`; chạy test bằng `npm.cmd test`.
+
+### Điều khiển
+
+- `WASD`: di chuyển; `Space`: nhảy.
+- `E`: nạp đom đóm vào Đèn Lồng Lớn gần nhất.
+- `Q`: tỏa sáng, tiêu hao 1 ánh sáng để làm choáng Bóng Mực trong bán kính 5 m.
+- Kéo chuột: xoay camera. Sau khi thắng/thua, nhấn `R` hoặc nút **Chơi lại**.
+
+### Headless
+
+```bash
+npm run headless -- --seed 42 --night 1 --ticks 600 --out result.jsonl
+```
+
+Hỗ trợ `--scenario`, `--inputs` và `--snapshot-every`. Cấu hình thật của mô phỏng được khai báo trong [game.contract.json](game.contract.json); các giả định và kiểm chứng Phase 1 được ghi trong `docs/phase-1.md`.
+
+### Giả định tuning Phase 1
+
+Mây chạy 5 m/s, mang tối đa 5 đom đóm; mỗi đèn cần 5 đom đóm. Bóng Mực chạy 2 m/s, chạm trong 1 m gây mất 1 ánh sáng; sau va chạm Mây bất tử 1,5 giây và rơi 50% số đom đóm đang mang. Đêm kéo dài 300 giây. Điểm: 10/đom đóm, 100/đèn, 25/mỗi Bóng Mực bị choáng, cộng điểm thời gian và ánh sáng còn lại khi thắng.
+
+---
+
 # Day 12 — AI SDLC: Đảo Đèn Lồng
 
 > **Cá nhân** (1 người / 1 MSSV) · Áp dụng SDLC cùng AI để xây một **game 3D** qua **4 phase**, từ yêu cầu ban đầu tới bản phát hành.
